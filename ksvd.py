@@ -326,6 +326,12 @@ def ksvd_dictionary_update(Y, D, X):
     X = X.copy()
     K = D.shape[1]
 
+    # Precompute full residual for faster updates
+    R = Y - D @ X
+    
+    # Seeded random generator for reproducible "dead atom" replacement
+    rng = np.random.default_rng(42)
+
     for k in range(K):
         # ── Find signals using atom k ──
         # ω_k = {i : X[k, i] ≠ 0}
@@ -334,29 +340,27 @@ def ksvd_dictionary_update(Y, D, X):
         if len(omega_k) == 0:
             # Atom k is unused — replace with a random direction
             # This prevents "dead" atoms in the dictionary
-            D[:, k] = np.random.randn(D.shape[0])
+            D[:, k] = rng.standard_normal(D.shape[0])
             D[:, k] /= np.linalg.norm(D[:, k])
             continue
 
-        # ── Compute error matrix excluding atom k ──
-        # E_k = Y - Σ_{j≠k} d_j · x_j^T
-        # Efficient form: E_k = Y - D·X + d_k · x_k^T
-        E_k = (
-            Y[:, omega_k]
-            - D @ X[:, omega_k]
-            + np.outer(D[:, k], X[k, omega_k])
-        )
+        # ── Compute error matrix excluding atom k over omega_k ──
+        # We add back the old contribution of atom k to the residual
+        E_k_omega = R[:, omega_k] + np.outer(D[:, k], X[k, omega_k])
 
         # ── SVD of the restricted error matrix ──
         # E_k ≈ U · Σ · V^T
         # Best rank-1 approximation: σ₁ · u₁ · v₁^T
-        U, S, Vt = np.linalg.svd(E_k, full_matrices=False)
+        U, S, Vt = np.linalg.svd(E_k_omega, full_matrices=False)
 
         # ── Update atom k and its coefficients ──
         # New atom = first left singular vector (best direction)
         D[:, k] = U[:, 0]
         # New coefficients = first singular value × first right singular vector
         X[k, omega_k] = S[0] * Vt[0, :]
+        
+        # ── Update the residual matrix ──
+        R[:, omega_k] = E_k_omega - np.outer(D[:, k], X[k, omega_k])
 
     return D, X
 
@@ -382,11 +386,11 @@ def ksvd_denoise(image, alpha, patch_size=8, n_atoms=None,
         7. Reconstruct image by averaging overlapping patches
 
     Alpha → Sparsity Mapping:
-        max_nonzero = max(1, round((1 - α) × patch_size))
+        max_nonzero = max(1, round((1 - α) × patch_size² / 4))
 
-        α = 0.10 → (1-0.10) × 8 = 7 atoms → mild denoising
-        α = 0.50 → (1-0.50) × 8 = 4 atoms → moderate denoising
-        α = 0.90 → (1-0.90) × 8 = 1 atom  → strong denoising
+        α = 0.10 → (1-0.10) × 16 = 14 atoms → mild denoising
+        α = 0.50 → (1-0.50) × 16 = 8 atoms → moderate denoising
+        α = 0.90 → (1-0.90) × 16 = 2 atom  → strong denoising
 
     Parameters
     ----------
@@ -435,9 +439,8 @@ def ksvd_denoise(image, alpha, patch_size=8, n_atoms=None,
     # ── Step 3: Initialize dictionary with DCT basis ──
     D = create_dct_dictionary(patch_size, n_atoms)
 
-    # ── Step 4: Compute sparsity from alpha ──
     # Higher alpha → fewer atoms allowed → more denoising
-    max_nonzero = max(1, int(round((1.0 - alpha) * patch_size)))
+    max_nonzero = max(1, int(round((1.0 - alpha) * (patch_size ** 2 / 4))))
 
     # ── Step 5: K-SVD iterations ──
     for it in range(iterations):

@@ -166,3 +166,59 @@ def resize_if_large(image: np.ndarray, max_dim: int = 256) -> np.ndarray:
     img_pil = Image.fromarray(image)
     img_resized = img_pil.resize((new_w, new_h), Image.LANCZOS)
     return np.array(img_resized, dtype=np.uint8)
+
+
+def visualize_dictionary(D: np.ndarray, patch_size: int, grid_cols: int = None) -> np.ndarray:
+    """
+    Visualize the learned dictionary atoms as a grid image.
+
+    Parameters
+    ----------
+    D : np.ndarray
+        Dictionary matrix of shape (patch_size**2, K).
+    patch_size : int
+        Size of each square atom (e.g., 8).
+    grid_cols : int or None
+        Number of columns in the grid. If None, tries to make it square.
+
+    Returns
+    -------
+    np.ndarray
+        A 2D uint8 image containing the grid of atoms, separated by a 1-pixel border.
+    """
+    d, K = D.shape
+    if grid_cols is None:
+        grid_cols = int(np.ceil(np.sqrt(K)))
+
+    grid_rows = int(np.ceil(K / grid_cols))
+
+    # 1 pixel border between atoms
+    border = 1
+
+    grid_h = grid_rows * patch_size + (grid_rows + 1) * border
+    grid_w = grid_cols * patch_size + (grid_cols + 1) * border
+
+    # Create dark background for the grid
+    grid_img = np.ones((grid_h, grid_w)) * 50.0
+
+    for k in range(K):
+        row = k // grid_cols
+        col = k % grid_cols
+
+        # Reshape atom
+        atom = D[:, k].reshape(patch_size, patch_size)
+
+        # Normalize atom to [0, 255]
+        atom_min, atom_max = atom.min(), atom.max()
+        if atom_max - atom_min > 1e-10:
+            atom_norm = (atom - atom_min) / (atom_max - atom_min) * 255.0
+        else:
+            atom_norm = np.zeros_like(atom)
+
+        y_start = row * patch_size + (row + 1) * border
+        x_start = col * patch_size + (col + 1) * border
+
+        grid_img[y_start:y_start+patch_size, x_start:x_start+patch_size] = atom_norm
+
+    return grid_img.astype(np.uint8)
+

@@ -17,10 +17,10 @@ Reference: Gonzalez & Woods, "Digital Image Processing"
 
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend for Streamlit
-from utils import load_image_as_grayscale, add_gaussian_noise, image_to_bytes, resize_if_large
+import matplotlib.pyplot as plt
+from utils import load_image_as_grayscale, add_gaussian_noise, image_to_bytes, resize_if_large, visualize_dictionary
 from metrics import compute_all_metrics, compute_psnr, compute_difference_map
 from wavelet import dwt_denoise, normalize_subband_for_display
 from ksvd import ksvd_denoise
@@ -190,19 +190,7 @@ with st.sidebar:
         max_value=1.0,
         value=0.5,
         step=0.05,
-        help="Controls denoising strength INSIDE each method. DWT → threshold = α × max|coeff|. K-SVD → atoms = (1−α) × patch_size."
-    )
-
-    # Alpha live preview in sidebar
-    max_nonzero_preview = max(1, int(round((1.0 - alpha) * 8)))
-    st.markdown(
-        f'<div style="background:#1e293b; border-left:3px solid #667eea; '
-        f'padding:0.5rem 0.75rem; border-radius:4px; margin-top:0.25rem; font-size:0.78rem; color:#94a3b8;">'
-        f'<b>α = {alpha:.2f}</b><br>'
-        f'DWT: T = {alpha:.2f} × max|coeff|<br>'
-        f'K-SVD: {max_nonzero_preview} atoms/patch'
-        f'</div>',
-        unsafe_allow_html=True
+        help="Controls denoising strength INSIDE each method. DWT → threshold = α × max|coeff|. K-SVD → scaling atoms."
     )
 
     patch_size = st.selectbox(
@@ -217,6 +205,18 @@ with st.sidebar:
         options=[5, 10, 15, 20, 30],
         index=1,
         help="Number of dictionary learning iterations for K-SVD (default: 10)."
+    )
+
+    # Alpha live preview in sidebar
+    max_nonzero_preview = max(1, int(round((1.0 - alpha) * (patch_size ** 2 / 4))))
+    st.markdown(
+        f'<div style="background:#1e293b; border-left:3px solid #667eea; '
+        f'padding:0.5rem 0.75rem; border-radius:4px; margin-top:0.25rem; font-size:0.78rem; color:#94a3b8;">'
+        f'<b>α = {alpha:.2f}</b><br>'
+        f'DWT: T = {alpha:.2f} × max|coeff|<br>'
+        f'K-SVD: {max_nonzero_preview} atoms/patch'
+        f'</div>',
+        unsafe_allow_html=True
     )
 
     # ── Phase Status ──
@@ -324,7 +324,7 @@ if uploaded_file is not None:
     # Run DWT first so we can use threshold in the banner
     dwt_result = dwt_denoise(noisy_image, alpha=alpha, wavelet="db1")
     dwt_denoised = dwt_result["denoised"]
-    max_nonzero_display = max(1, int(round((1.0 - alpha) * patch_size)))
+    max_nonzero_display = max(1, int(round((1.0 - alpha) * (patch_size ** 2 / 4))))
 
     # Alpha explanation banner
     st.markdown(
@@ -425,7 +425,7 @@ if uploaded_file is not None:
         )
         st.caption(
             f"Atoms: {ksvd_result['n_atoms']} | "
-            f"Active: {ksvd_result['sparsity']} = max(1, round((1−{alpha:.2f})×{patch_size})) | "
+            f"Active: {ksvd_result['sparsity']} = max(1, round((1−{alpha:.2f})×{patch_size}²/4)) | "
             f"Higher α → fewer atoms → sparser"
         )
 
@@ -709,6 +709,32 @@ if uploaded_file is not None:
             f"this removes noise while preserving strong edges."
         )
 
+    # ── Learned Dictionary Visualization ──
+    with st.expander("📖 Learned Dictionary (K-SVD Atoms)", expanded=False):
+        st.markdown(f"""
+        This grid shows the **{ksvd_result['n_atoms']} dictionary atoms** learned by K-SVD to sparsely represent patches
+        from this specific image. Notice how some atoms capture flat regions, while others capture edges and textures.
+        """)
+        
+        show_dictionary = st.checkbox("Show Dictionary Atoms Grid", value=False)
+        if show_dictionary:
+            dict_grid = visualize_dictionary(ksvd_result["dictionary"], patch_size)
+            
+            st.image(
+                dict_grid, 
+                caption=f"K-SVD Dictionary ({patch_size}x{patch_size} atoms)", 
+                use_container_width=True, 
+                clamp=True
+            )
+            
+            st.download_button(
+                "⬇️ Download Dictionary Grid",
+                data=image_to_bytes(dict_grid),
+                file_name=f"ksvd_dictionary_alpha{alpha:.2f}.png",
+                mime="image/png",
+                use_container_width=True,
+            )
+
     # ── Current Parameters Summary ──
     st.divider()
     st.subheader(" Current Parameters")
@@ -735,13 +761,13 @@ if uploaded_file is not None:
         with acol2:
             st.markdown(f"""
             ####  K-SVD (Sparse Representation)
-            **Formula:** `max_atoms = max(1, round((1 − α) × patch_size))`
+            **Formula:** `max_atoms = max(1, round((1 − α) × patch_size² / 4))`
 
             - α inversely controls how many dictionary atoms each patch can use
             - **Low α (0.1)** → many atoms → detailed reconstruction → **mild denoising**
             - **High α (1.0)** → few atoms → coarse reconstruction → **strong denoising**
 
-            Current: **max_atoms = max(1, round((1−{alpha:.2f}) × {patch_size})) = {ksvd_result['sparsity']}**
+            Current: **max_atoms = max(1, round((1−{alpha:.2f}) × {patch_size}² / 4)) = {ksvd_result['sparsity']}**
             """)
         st.warning(
             " **Important:** Alpha acts INSIDE each method independently. "

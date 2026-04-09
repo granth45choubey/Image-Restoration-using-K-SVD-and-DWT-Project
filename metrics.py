@@ -95,6 +95,9 @@ def compute_ssim(original: np.ndarray, restored: np.ndarray) -> float:
     float
         SSIM value. Higher is better (1.0 = identical).
     """
+    if np.array_equal(original, restored):
+        return 1.0
+        
     # Determine data_range from input dtype
     data_range = 255.0 if original.max() > 1.0 else 1.0
     ssim_value = ssim(original, restored, data_range=data_range)
