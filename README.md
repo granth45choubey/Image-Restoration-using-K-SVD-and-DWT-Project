@@ -105,7 +105,17 @@ python app.py
 * Understanding sparse representation techniques
 
 ---
+## ⚙️ Pipeline
 
+```text
+Original Image
+     ↓
+Add Gaussian Noise (σ)
+     ↓
+Apply DWT Denoising
+Apply K-SVD Denoising
+     ↓
+Compare Outputs (PSNR, MSE, SSIM)
 ##  Future Improvements
 
 * Add real-time webcam input
