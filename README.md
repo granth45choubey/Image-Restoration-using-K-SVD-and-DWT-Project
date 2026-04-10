@@ -1,3 +1,4 @@
+
 # Image-Restoration-using-K-SVD-and-DWT-Project
 Interactive image restoration tool that adds adjustable noise to input images and denoises them using K-SVD and DWT. Features real-time sliders for noise and denoising control, enabling visual comparison of both techniques for better understanding and performance analysis.
 
@@ -80,8 +81,12 @@ streamlit run app.py
 
 ##  Demo
 
->  Add screenshots or a GIF here showing:
->
+>  <img width="1919" height="1079" alt="Screenshot 2026-04-11 004616" src="https://github.com/user-attachments/assets/fc56d41f-db91-4cfc-a769-aa0851f5b916" />
+><img width="1905" height="944" alt="Screenshot 2026-04-10 225131" src="https://github.com/user-attachments/assets/1aaaee89-8b8e-499d-be19-21563bfa1cbb" />
+><img width="1449" height="759" alt="Screenshot 2026-04-10 225212" src="https://github.com/user-attachments/assets/18a7dec9-18f0-433a-b63f-74dff0afeb06" />
+><img width="1426" height="903" alt="Screenshot 2026-04-10 225244" src="https://github.com/user-attachments/assets/c077a54f-b76d-41fc-9ee3-a4da03a67b32" />
+><img width="1671" height="624" alt="Screenshot 2026-04-10 225739" src="https://github.com/user-attachments/assets/11591ddf-dcec-4048-bdb8-aafa37f933d8" />
+
 > * Noise slider
 > * K-SVD output
 > * DWT output
